@@ -133,6 +133,9 @@ dmypy.json
 *.pt
 *.bin
 
+# raw text file
+*.csv
+
 # temp test file
 test.py
 
