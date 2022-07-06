@@ -1,23 +1,31 @@
+import os
 from collections import defaultdict
 from datetime import datetime
 
 import torch
+from loguru import logger
 from torch.nn import BCEWithLogitsLoss
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AdamW, get_scheduler
 
 from config.definition import *
+from config.settings import LogDir
 from data_set.data_loader import create_data_loader
 from train.evaluate_flow import eval_epoch
 from train.predict_flow import get_classification_report, save_pt, get_model_size
 from train.train_flow import train_epoch
+from utils.log_helper import create_logger
 from utils.train_helper import get_dummy_input
 
+logger_handler = create_logger(LogDir.training)
 
+
+@logger.catch
 def run(
         df_train,
         df_test,
         label_col,
+        version,
         learning_rate=2e-5,
         epochs=50,
         batch_size=32,
@@ -25,19 +33,28 @@ def run(
         num_labels=4,
         ckpt="roberta-base",
         dsn="au_1200_p",
-        project_name="audience_bert_4_class",
+        # project_name="audience_bert_4_class",
         prefix=None
 ):
-    display_name = f"{ckpt}_{prefix}_{datetime.now()}" if prefix else f"{ckpt}_{datetime.now()}"
+    if not version or not isinstance(version, int):
+        raise ValueError(f"version should be a non-zero integer")
+
+    display_name = f"{ckpt}_{prefix}_{datetime.now().date()}" if prefix else f"{ckpt}_{datetime.now().date()}"
+
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
     # wandb.init(project=project_name, name=display_name)
-    config = {
+    training_config = {
         "dataset": dsn,
         "learning_rate": learning_rate,
         "epochs": epochs,
         "batch_size": batch_size,
         "max_len": max_len,
         "pre-trained model": ckpt,
+        "device": device
     }
+
+    logger_handler.info(training_config)
 
     # wandb.config.update(config)
 
@@ -63,7 +80,6 @@ def run(
         num_warmup_steps=0, num_training_steps=num_training_steps
     )
 
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
 
     dummy_input = get_dummy_input(df_train.text.max(), tokenizer, max_len, device=device)
@@ -72,38 +88,49 @@ def run(
 
     b_history = defaultdict(list)
 
-    print(' *** Start training flow *** ')
+    logger_handler.info(' *** Start training flow *** ')
+    # print(' *** Start training flow *** ')
     best_acc = 0
     best_epoch = 0
 
+    save_model_path = os.path.join(MODEL_DIR / f"bin/{display_name.split('/')[-1]}_{dsn}.bin")
+    false_pred_path = os.path.join(MODEL_DIR / f"false_pred/{display_name.split('/')[-1]}_{dsn}.csv")
     # wandb.watch(model, log="all")
 
     for epoch in range(1, num_epochs + 1):
-        print('=' * 100)
-        print(f"Epoch {epoch} / {num_epochs}")
+        # print('=' * 100)
+        # print(f"Epoch {epoch} / {num_epochs}")
+        # print('-' * 100)
 
-        print('-' * 100)
+        logger_handler.info('=' * 100)
+        logger_handler.info(f"Epoch {epoch} / {num_epochs}")
+        logger_handler.info('-' * 100)
+
         train_loss, train_acc, train_time = train_epoch(
-            model, train_loader, optimizer, device, lr_scheduler,
-            num_labels, loss_func=BCEWithLogitsLoss()
+            model, train_loader, optimizer, device,
+            num_labels, lr_scheduler, loss_func=BCEWithLogitsLoss()
         )
-        print(f"training loss {train_loss}; training time {train_time}")
+        # print(f"training loss {train_loss}; training time {train_time}")
+        logger_handler.info(f"training loss {train_loss}; training time {train_time}")
 
         val_loss, val_acc, val_time = eval_epoch(
             model, test_loader, device, num_labels,
             loss_func=BCEWithLogitsLoss()
         )
-        print(f"validation loss {val_loss}; validation time {val_time}")
+        # print(f"validation loss {val_loss}; validation time {val_time}")
+        logger_handler.info(f"validation loss {val_loss}; validation time {val_time}")
 
-        print(f"training acc {train_acc}")
-        print(f"validation acc {val_acc}")
+        # print(f"training acc {train_acc}")
+        # print(f"validation acc {val_acc}")
+        logger_handler.info(f"training acc {train_acc}; validation acc {val_acc}")
 
         if val_acc['f1'] > best_acc:
             best_acc = val_acc['f1']
             best_epoch = epoch
-            torch.save(model.state_dict(), f"./model/{display_name.split('/')[-1]}_{dsn}.bin")
+            torch.save(model.state_dict(), save_model_path)
             # wandb.save(f"{ckpt.split('/')[-1]}_{dsn}_{best_acc}.bin")
-            print(f"best f1_score is updated: {best_acc}")
+            # print(f"best f1_score is updated: {best_acc}")
+            logger_handler.info(f"best f1_score is updated: {best_acc}")
 
         b_history['train_acc'].append(train_acc)
         b_history['train_loss'].append(train_loss)
@@ -121,30 +148,39 @@ def run(
         # )
 
         progress_bar.update(1)
-    print(' *** training is done !! *** ')
-    print(f"Best epoch: {best_epoch}")
-    print(f"Best f1_score: {best_acc}")
+    # print(' *** training is done !! *** ')
+    # print(f"Best epoch: {best_epoch}")
+    # print(f"Best f1_score: {best_acc}")
+
+    logger_handler.info(' *** training is done !! *** ')
+    logger_handler.info(f"Best epoch: {best_epoch}")
+    logger_handler.info(f"Best f1_score: {best_acc}")
 
     report, false_prediction_df = get_classification_report(
         model,
         test_loader,
-        f"./model/{display_name.split('/')[-1]}_{dsn}.bin",
+        save_model_path,
         device,
         label_col
     )
+    save_model_directory = Path(os.path.join(MODEL_DIR / f"torch_script/audience_bert/{version}"))
+    save_model_directory.mkdir(exist_ok=True)
+    save_model_pt_path = os.path.join(save_model_directory / f"model.pt")
 
     save_pt(
         model,
         dummy_input,
-        f"./model/{display_name.split('/')[-1]}_{dsn}.bin",
-        f"./model/torch_script/{ckpt.split('/')[-1]}"
+        save_model_path,
+        save_model_pt_path
     )
 
-    print(report)
+    # print(report)
+    logger_handler.info(report)
 
     model_size = get_model_size(model)
 
-    print(model_size)
+    # print(model_size)
+    logger_handler.info(model_size)
 
     # wandb.log({
     #     "classification_report": wandb.Table(dataframe=report),
@@ -154,4 +190,8 @@ def run(
 
     # wandb.finish()
 
-    false_prediction_df.to_csv(f"./false_pred/{display_name.split('/')[-1]}.csv", encoding='utf-8', index=False)
+    false_prediction_df.to_csv(false_pred_path, encoding='utf-8', index=False)
+
+    return report.to_json(orient='records', force_ascii=False), \
+           model_size.to_json(orient='records', force_ascii=False), \
+           false_prediction_df.to_json(orient='records', force_ascii=False)

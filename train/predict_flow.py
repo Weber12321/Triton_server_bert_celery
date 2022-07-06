@@ -89,4 +89,4 @@ def get_model_size(model):
 def save_pt(model, dummy_input, state_dict_path, pt_output_path):
     model.load_state_dict(torch.load(state_dict_path))
     traced_model = torch.jit.trace(model, dummy_input)
-    torch.jit.save(traced_model, f"{pt_output_path}.pt")
+    torch.jit.save(traced_model, pt_output_path)

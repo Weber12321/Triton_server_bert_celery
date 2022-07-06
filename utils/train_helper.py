@@ -1,4 +1,12 @@
+import json
+import os.path
+
 import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+from config.definition import DATA_DIR
+
 
 def sigmoid_logits_to_one_hot(arr: np.array, thresh=0.5):
     arr[arr > thresh] = 1
@@ -28,3 +36,21 @@ def get_dummy_input(data, tokenizer, max_len, device):
     )
 
     return encoding['input_ids'].to(device), encoding['attention_mask'].to(device)
+
+
+def load_dataset(file_name, label_file_name, test_size=0.2, random_state=42):
+    df_path = os.path.join(DATA_DIR / file_name)
+    label_path = os.path.join(DATA_DIR / label_file_name)
+
+    df = pd.read_json(df_path)
+
+    df_train, df_test = train_test_split(
+        df, test_size=test_size, random_state=random_state
+    )
+
+    with open(label_path) as f:
+        labels = json.load(f)
+
+    return df_train, df_test, labels
+
+

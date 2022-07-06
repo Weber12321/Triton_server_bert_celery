@@ -17,6 +17,7 @@ app.conf.task_routes = {
 
 @app.task
 def training(
+        version,
         learning_rate=2e-5,
         epochs=50,
         batch_size=32,
@@ -32,6 +33,7 @@ def training(
         df_train= df_train,
         df_test= df_test,
         label_col=label_col,
+        version=version,
         learning_rate=learning_rate,
         epochs=epochs,
         batch_size=batch_size,
