@@ -132,3 +132,6 @@ dmypy.json
 # model file
 *.pt
 *.bin
+
+# temp test file
+test.py
