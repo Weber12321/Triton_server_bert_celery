@@ -11,8 +11,6 @@ services:
     environment:
       LEVEL: ${LEVEL}
       REDIS: ${REDIS}
-    networks:
-      - model_networks
     depends_on:
       - redis
 
@@ -20,8 +18,6 @@ services:
     image: redis:latest
     ports:
       - 6379:6379
-    networks:
-      - model_networks
 
   triton_server:
     image: nvcr.io/nvidia/tritonserver:22.06-py3
