@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED 1
 
 WORKDIR /
 
-COPY pyproject.toml poetry.lock app.py ./
+COPY ../pyproject.toml poetry.lock app.py ./
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
