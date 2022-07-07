@@ -93,8 +93,13 @@ def run(
     best_acc = 0
     best_epoch = 0
 
-    save_model_path = os.path.join(MODEL_DIR / f"bin/{display_name.split('/')[-1]}_{dsn}.bin")
-    false_pred_path = os.path.join(MODEL_DIR / f"false_pred/{display_name.split('/')[-1]}_{dsn}.csv")
+    save_model_bin_path = Path(os.path.join(MODEL_DIR / 'bin'))
+    save_model_bin_path.mkdir(exist_ok=True)
+    save_model_path = os.path.join(save_model_bin_path / f"{display_name.split('/')[-1]}_{dsn}.bin")
+
+    save_model_fp_path = Path(os.path.join(MODEL_DIR / 'false_pred'))
+    save_model_fp_path.mkdir(exist_ok=True)
+    false_pred_path = os.path.join(save_model_fp_path / f"{display_name.split('/')[-1]}_{dsn}.csv")
     # wandb.watch(model, log="all")
 
     for epoch in range(1, num_epochs + 1):

@@ -5,9 +5,9 @@ services:
     env_file: .env
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: Dockerfile
     volumes:
-      - model_file:/model/torch_script
+      - models:/model/torch_script
     environment:
       LEVEL: ${LEVEL}
       REDIS: ${REDIS}
@@ -25,13 +25,13 @@ services:
       - 8000:8000
       - 8001:8001
       - 8002:8002
-    command: ["tritonserver", "--model-store=/model/torch_script", "--model-control-mode=poll", --repository-poll-secs=15]
+    command: ["tritonserver", "--model-store=/models", "--model-control-mode=poll", --repository-poll-secs=15]
     volumes:
-      - model_file:/model/torch_script
+      - models:/models
     shm_size: 1g
     ulimits:
       memlock: -1
       stack: 67108864
 
 volumes:
-  model_file:
+  models:

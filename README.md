@@ -31,9 +31,17 @@ REDIS=redis://localhost:6379/0
   + celery_server: for model training and validation
   + redis: message broker and backend for celery_worker
   + triton server: for inference usage, model deployment 
+  
+    + run triton server respectively
+  
+      ```bash
+      docker run --rm --name test_triton_server --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 -p 8000:8000 -p 8001:8001 -p 8002:8002 -v "$(pwd)"/model/torch_script:/models nvcr.io/nvidia/tritonserver:22.06-py3 tritonserver --model-store=/models --model-control-mode=poll
+      ```
+  
+      
 
 ```bash
-$ docker-compose -f docker/docker-compose.yml --env-file .env up
+$ docker-compose -f docker-compose.yml --env-file .env up
 ```
 
 + Test if the model is loaded
@@ -41,8 +49,9 @@ $ docker-compose -f docker/docker-compose.yml --env-file .env up
   + 8001: GRPC protocol
 
 ```bash
-$ curl -v localhost:8000/v1/health/ready
+$ curl -v localhost:8000/v2/health/ready
+
+$ curl localhost:8000/v2/models/audience_bert/versions/1/stats
 
 $ GET v2/models[/${MODEL_NAME}[/versions/${MODEL_VERSION}]]/stats
 ```
-
